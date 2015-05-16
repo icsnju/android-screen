@@ -1092,7 +1092,7 @@ public abstract class BatteryStats implements Parcelable {
      * 
      * {@hide}
      */
-    public abstract long getScreenBrightnessTime(int brightnessBin,
+    public abstract long getScreenBrightnessTime(int brightnessBin, int redBin, int greenBin, int blueBin,
             long elapsedRealtimeUs, int which);
 
     /**
@@ -1948,9 +1948,15 @@ public abstract class BatteryStats implements Parcelable {
                 lowPowerModeEnabledTime / 1000);
         
         // Dump screen brightness stats
-        Object[] args = new Object[NUM_SCREEN_BRIGHTNESS_BINS];
+        Object[] args = new Object[NUM_SCREEN_BRIGHTNESS_BINS*NUM_RGB_RED_BINS*NUM_RGB_GREEN_BINS*NUM_RGB_BLUE_BINS];
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            args[i] = getScreenBrightnessTime(i, rawRealtime, which) / 1000;
+            for (int j = 0; j < BatteryStats.NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < BatteryStats.NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < BatteryStats.NUM_RGB_BLUE_BINS; m++) {
+                        args[125*i + 25*j + 5*k + m] = getScreenBrightnessTime(i, j, k, m, rawRealtime, which) / 1000;
+                    }
+                }
+            }
         }
         dumpLine(pw, 0 /* uid */, category, SCREEN_BRIGHTNESS_DATA, args);
         
@@ -2428,7 +2434,14 @@ public abstract class BatteryStats implements Parcelable {
         sb.append("  Screen brightnesses:");
         boolean didOne = false;
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            final long time = getScreenBrightnessTime(i, rawRealtime, which);
+            long time = 0;
+            for (int j = 0; j < BatteryStats.NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < BatteryStats.NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < BatteryStats.NUM_RGB_BLUE_BINS; m++) {
+                    	time += getScreenBrightnessTime(i, j, k, m, rawRealtime, which);
+                    }
+                }
+            }
             if (time == 0) {
                 continue;
             }

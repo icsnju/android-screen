@@ -23,6 +23,8 @@ import android.app.ActivityManager;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHeadset;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkStats;
 import android.net.wifi.WifiManager;
@@ -254,7 +256,10 @@ public final class BatteryStatsImpl extends BatteryStats {
     StopwatchTimer mScreenOnTimer;
 
     int mScreenBrightnessBin = -1;
-    final StopwatchTimer[] mScreenBrightnessTimer = new StopwatchTimer[NUM_SCREEN_BRIGHTNESS_BINS];
+    int mRedBin = -1;
+    int mGreenBin = -1;
+    int mBlueBin = -1;
+    final StopwatchTimer[][][][] mScreenBrightnessTimer = new StopwatchTimer[NUM_SCREEN_BRIGHTNESS_BINS][NUM_RGB_RED_BINS][NUM_RGB_GREEN_BINS][NUM_RGB_BLUE_BINS];
     
     final Runnable noteScreenContent = new Runnable() {
         public void run() {
@@ -457,12 +462,6 @@ public final class BatteryStatsImpl extends BatteryStats {
         mCheckinFile = null;
         mHandler = null;
         clearHistoryLocked();
-        
-        if (!noteScreenContentThreadStarted) {
-            new Thread(noteScreenContent).start();
-            noteScreenContentThreadStarted = true;
-            Log.v("lzl", "note screen content thread started in BatteryStatsImpl()");
-        }
     }
 
     public static interface TimeBaseObs {
@@ -3034,7 +3033,7 @@ public final class BatteryStatsImpl extends BatteryStats {
             }
 
             if (state == Display.STATE_ON) {
-            	//Log.v("lzl", "Screen turning on");
+            	Log.v("lzl", "Screen turning on");
                 // Screen turning on.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3043,8 +3042,8 @@ public final class BatteryStatsImpl extends BatteryStats {
                         + Integer.toHexString(mHistoryCur.states));
                 addHistoryRecordLocked(elapsedRealtime, uptime);
                 mScreenOnTimer.startRunningLocked(elapsedRealtime);
-                if (mScreenBrightnessBin >= 0) {
-                    mScreenBrightnessTimer[mScreenBrightnessBin].startRunningLocked(elapsedRealtime);
+                if (mScreenBrightnessBin >= 0 && mRedBin >= 0 && mGreenBin >= 0 && mBlueBin >= 0) {
+                    mScreenBrightnessTimer[mScreenBrightnessBin][mRedBin][mGreenBin][mBlueBin].startRunningLocked(elapsedRealtime);
                 }
 
                 updateTimeBasesLocked(mOnBatteryTimeBase.isRunning(), false,
@@ -3060,7 +3059,7 @@ public final class BatteryStatsImpl extends BatteryStats {
                     updateDischargeScreenLevelsLocked(false, true);
                 }
             } else if (oldState == Display.STATE_ON) {
-            	//Log.v("lzl", "Screen turning off or dozing");
+            	Log.v("lzl", "Screen turning off or dozing");
                 // Screen turning off or dozing.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3069,8 +3068,8 @@ public final class BatteryStatsImpl extends BatteryStats {
                         + Integer.toHexString(mHistoryCur.states));
                 addHistoryRecordLocked(elapsedRealtime, uptime);
                 mScreenOnTimer.stopRunningLocked(elapsedRealtime);
-                if (mScreenBrightnessBin >= 0) {
-                    mScreenBrightnessTimer[mScreenBrightnessBin].stopRunningLocked(elapsedRealtime);
+                if (mScreenBrightnessBin >= 0 && mRedBin >= 0 && mGreenBin >= 0 && mBlueBin >= 0) {
+                    mScreenBrightnessTimer[mScreenBrightnessBin][mRedBin][mGreenBin][mBlueBin].stopRunningLocked(elapsedRealtime);
                 }
 
                 noteStopWakeLocked(-1, -1, "screen", "screen", WAKE_TYPE_PARTIAL,
@@ -3089,10 +3088,66 @@ public final class BatteryStatsImpl extends BatteryStats {
     
     public void noteScreenContentLocked() {
     	Log.v("lzl", "Screen content changed, time: " + System.currentTimeMillis());
+    	
+    	Bitmap bitmap = null;
+    	if (bitmap == null) return;
+    	
+    	int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int pixels = width * height;
+        
+        double redBinTemp = 0, greenBinTemp = 0, blueBinTemp = 0;
+        
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                int color = bitmap.getPixel(i, j);
+                double red = (double) Integer.valueOf(Integer.toHexString(Color.red(color)), 16) / 255;
+                double green = (double) Integer.valueOf(Integer.toHexString(Color.green(color)), 16) / 255;
+                double blue = (double) Integer.valueOf(Integer.toHexString(Color.blue(color)), 16) / 255;
+                
+                double redGC = red <= 0.04045 ? red / 12.92 : Math.pow((red + 0.055) / 1.055, 2.4); // red gamma corrected
+                double greenGC = green <= 0.04045 ? green / 12.92 : Math.pow((green + 0.055) / 1.055, 2.4); //green gamma corrected
+                double blueGC = blue <= 0.04045 ? blue / 12.92 : Math.pow((blue + 0.055) / 1.055, 2.4); //blue gamma corrected
+            
+                redBinTemp += redGC / pixels;
+                greenBinTemp += greenGC / pixels;
+                blueBinTemp += blueGC / pixels;
+            }
+        }
+        
+        int redBin = (int) (redBinTemp / 0.2), greenBin = (int) (greenBinTemp / 0.2), blueBin = (int) (blueBinTemp / 0.2);
+        if (redBin < 0) 
+            redBin = 0;
+        else if (redBin >= NUM_RGB_RED_BINS) 
+            redBin = NUM_RGB_RED_BINS -1;
+        if (greenBin < 0) 
+            greenBin = 0;
+        else if (greenBin >= NUM_RGB_GREEN_BINS) 
+            greenBin = NUM_RGB_GREEN_BINS -1;
+        if (blueBin < 0) 
+            blueBin = 0;
+        else if (blueBin >= NUM_RGB_BLUE_BINS) 
+            blueBin = NUM_RGB_BLUE_BINS -1;
+        if (mRedBin != redBin || mGreenBin != greenBin || mBlueBin != blueBin) {
+            final long elapsedRealtime = SystemClock.elapsedRealtime();
+            final long uptime = SystemClock.uptimeMillis();
+            addHistoryRecordLocked(elapsedRealtime, uptime);
+            if (mScreenState == Display.STATE_ON) {
+                if (mScreenBrightnessBin >= 0 && mRedBin >=0 && mGreenBin >= 0 && mBlueBin >= 0) {
+                    mScreenBrightnessTimer[mScreenBrightnessBin][mRedBin][mGreenBin][mBlueBin].stopRunningLocked(elapsedRealtime);
+                }
+                if (mScreenBrightnessBin >= 0) {
+                    mScreenBrightnessTimer[mScreenBrightnessBin][redBin][greenBin][blueBin].startRunningLocked(elapsedRealtime);
+                }
+            }
+            mRedBin = redBin; mGreenBin = greenBin; mBlueBin = blueBin;
+        }
+        
+        bitmap.recycle();
     }
 
     public void noteScreenBrightnessLocked(int brightness) {
-    	//Log.v("lzl", "Screen brightness changed");
+    	Log.v("lzl", "Screen brightness changed");
         // Bin the brightness.
         int bin = brightness / (256/NUM_SCREEN_BRIGHTNESS_BINS);
         if (bin < 0) bin = 0;
@@ -3106,10 +3161,12 @@ public final class BatteryStatsImpl extends BatteryStats {
                     + Integer.toHexString(mHistoryCur.states));
             addHistoryRecordLocked(elapsedRealtime, uptime);
             if (mScreenState == Display.STATE_ON) {
-                if (mScreenBrightnessBin >= 0) {
-                    mScreenBrightnessTimer[mScreenBrightnessBin].stopRunningLocked(elapsedRealtime);
+                if (mScreenBrightnessBin >= 0 && mRedBin >= 0 && mGreenBin >= 0 && mBlueBin >= 0) {
+                    mScreenBrightnessTimer[mScreenBrightnessBin][mRedBin][mGreenBin][mBlueBin].stopRunningLocked(elapsedRealtime);
                 }
-                mScreenBrightnessTimer[bin].startRunningLocked(elapsedRealtime);
+                if (mRedBin >= 0 && mGreenBin >= 0 && mBlueBin >= 0) {
+                	mScreenBrightnessTimer[bin][mRedBin][mGreenBin][mBlueBin].startRunningLocked(elapsedRealtime);
+                }
             }
             mScreenBrightnessBin = bin;
         }
@@ -3973,9 +4030,9 @@ public final class BatteryStatsImpl extends BatteryStats {
         return mScreenOnTimer.getCountLocked(which);
     }
 
-    @Override public long getScreenBrightnessTime(int brightnessBin,
+    @Override public long getScreenBrightnessTime(int brightnessBin, int redBin, int greenBin, int blueBin,
             long elapsedRealtimeUs, int which) {
-        return mScreenBrightnessTimer[brightnessBin].getTotalTimeLocked(
+        return mScreenBrightnessTimer[brightnessBin][redBin][greenBin][blueBin].getTotalTimeLocked(
                 elapsedRealtimeUs, which);
     }
 
@@ -6348,7 +6405,13 @@ public final class BatteryStatsImpl extends BatteryStats {
         mStartCount++;
         mScreenOnTimer = new StopwatchTimer(null, -1, null, mOnBatteryTimeBase);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i] = new StopwatchTimer(null, -100-i, null, mOnBatteryTimeBase);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m] = new StopwatchTimer(null, -100-125*i-25*j-5*k-m, null, mOnBatteryTimeBase);
+                    }
+                }
+            }
         }
         mInteractiveTimer = new StopwatchTimer(null, -9, null, mOnBatteryTimeBase);
         mLowPowerModeEnabledTimer = new StopwatchTimer(null, -2, null, mOnBatteryTimeBase);
@@ -6404,10 +6467,11 @@ public final class BatteryStatsImpl extends BatteryStats {
         clearHistoryLocked();
         
         if (!noteScreenContentThreadStarted) {
-            new Thread(noteScreenContent).start();
-            noteScreenContentThreadStarted = true;
-            Log.v("lzl", "note screen content thread started in BatteryStatsImpl(File, Handler)");
+        	new Thread(noteScreenContent).start();
+        	noteScreenContentThreadStarted = true;
+        	Log.v("lzl", "note screen content thread started in BatteryStatsImpl(File, Handler)"); //called on reboot
         }
+        
     }
 
     public BatteryStatsImpl(Parcel p) {
@@ -6416,12 +6480,6 @@ public final class BatteryStatsImpl extends BatteryStats {
         mHandler = null;
         clearHistoryLocked();
         readFromParcel(p);
-        
-        if (!noteScreenContentThreadStarted) {
-            new Thread(noteScreenContent).start();
-            noteScreenContentThreadStarted = true;
-            Log.v("lzl", "note screen content thread started in BatteryStatsImpl(Parcel p)");
-        }
     }
 
     public void setCallback(BatteryCallback cb) {
@@ -6646,7 +6704,13 @@ public final class BatteryStatsImpl extends BatteryStats {
         initTimes(SystemClock.uptimeMillis() * 1000, SystemClock.elapsedRealtime() * 1000);
         mScreenOnTimer.reset(false);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i].reset(false);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m].reset(false);
+                    }
+                }
+            }
         }
         mInteractiveTimer.reset(false);
         mLowPowerModeEnabledTimer.reset(false);
@@ -7857,7 +7921,13 @@ public final class BatteryStatsImpl extends BatteryStats {
         mScreenState = Display.STATE_UNKNOWN;
         mScreenOnTimer.readSummaryFromParcelLocked(in);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i].readSummaryFromParcelLocked(in);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m].readSummaryFromParcelLocked(in);
+                    }
+                }
+            }
         }
         mInteractive = false;
         mInteractiveTimer.readSummaryFromParcelLocked(in);
@@ -8145,7 +8215,13 @@ public final class BatteryStatsImpl extends BatteryStats {
 
         mScreenOnTimer.writeSummaryFromParcelLocked(out, NOWREAL_SYS);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i].writeSummaryFromParcelLocked(out, NOWREAL_SYS);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m].writeSummaryFromParcelLocked(out, NOWREAL_SYS);
+                    }
+                }
+            }
         }
         mInteractiveTimer.writeSummaryFromParcelLocked(out, NOWREAL_SYS);
         mLowPowerModeEnabledTimer.writeSummaryFromParcelLocked(out, NOWREAL_SYS);
@@ -8432,8 +8508,14 @@ public final class BatteryStatsImpl extends BatteryStats {
         mScreenState = Display.STATE_UNKNOWN;
         mScreenOnTimer = new StopwatchTimer(null, -1, null, mOnBatteryTimeBase, in);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i] = new StopwatchTimer(null, -100-i, null, mOnBatteryTimeBase,
-                    in);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m] = new StopwatchTimer(null, -100-125*i-25*j-5*k-m, null, mOnBatteryTimeBase,
+                                in);
+                    }
+                }
+            }
         }
         mInteractive = false;
         mInteractiveTimer = new StopwatchTimer(null, -9, null, mOnBatteryTimeBase, in);
@@ -8590,7 +8672,13 @@ public final class BatteryStatsImpl extends BatteryStats {
 
         mScreenOnTimer.writeToParcel(out, uSecRealtime);
         for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            mScreenBrightnessTimer[i].writeToParcel(out, uSecRealtime);
+            for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                        mScreenBrightnessTimer[i][j][k][m].writeToParcel(out, uSecRealtime);
+                    }
+                }
+            }
         }
         mInteractiveTimer.writeToParcel(out, uSecRealtime);
         mLowPowerModeEnabledTimer.writeToParcel(out, uSecRealtime);
@@ -8718,8 +8806,14 @@ public final class BatteryStatsImpl extends BatteryStats {
             pr.println("*** Screen timer:");
             mScreenOnTimer.logState(pr, "  ");
             for (int i=0; i<NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-                pr.println("*** Screen brightness #" + i + ":");
-                mScreenBrightnessTimer[i].logState(pr, "  ");
+                for (int j = 0; j < NUM_RGB_RED_BINS; j++) {
+                    for (int k = 0; k < NUM_RGB_GREEN_BINS; k++) {
+                        for (int m = 0; m < NUM_RGB_BLUE_BINS; m++) {
+                            pr.println("*** Screen brightness #" + i + "Red #" + j + "Green #" + k + "Blue #" + m + ":");
+                            mScreenBrightnessTimer[i][j][k][m].logState(pr, "  ");
+                        }
+                    }
+                }
             }
             pr.println("*** Interactive timer:");
             mInteractiveTimer.logState(pr, "  ");

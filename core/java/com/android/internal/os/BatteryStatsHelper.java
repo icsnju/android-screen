@@ -674,17 +674,40 @@ public final class BatteryStatsHelper {
         power += screenOnTimeMs * mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_ON);
         final double screenFullPower =
                 mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_FULL);
+        
+        final double screenOnPowerRed = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_ON_RED);
+        final double screenOnPowerGreen = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_ON_GREEN);
+        final double screenOnPowerBlue = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_ON_BLUE);
+        final double screenFullPowerRed = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_FULL_RED);
+        final double screenFullPowerGreen = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_FULL_GREEN);
+        final double screenFullPowerBlue = 
+                mPowerProfile.getAveragePower(PowerProfile.POWER_SCREEN_FULL_BLUE);
+        
         for (int i = 0; i < BatteryStats.NUM_SCREEN_BRIGHTNESS_BINS; i++) {
-            double screenBinPower = screenFullPower * (i + 0.5f)
-                    / BatteryStats.NUM_SCREEN_BRIGHTNESS_BINS;
-            long brightnessTime = mStats.getScreenBrightnessTime(i, mRawRealtime, mStatsType)
-                    / 1000;
-            double p = screenBinPower*brightnessTime;
-            if (DEBUG && p != 0) {
-                Log.d(TAG, "Screen bin #" + i + ": time=" + brightnessTime
-                        + " power=" + makemAh(p / (60 * 60 * 1000)));
-            }
-            power += p;
+        	for (int j = 0; j < BatteryStats.NUM_RGB_RED_BINS; j++) {
+                for (int k = 0; k < BatteryStats.NUM_RGB_GREEN_BINS; k++) {
+                    for (int m = 0; m < BatteryStats.NUM_RGB_BLUE_BINS; m++) {
+                    	double brightnessBin = (i + 0.5f) / BatteryStats.NUM_SCREEN_BRIGHTNESS_BINS;
+                    	double screenBinPower = screenFullPower * brightnessBin +
+                                (screenOnPowerRed + brightnessBin * screenFullPowerRed) * (j + 0.5f) / BatteryStats.NUM_RGB_RED_BINS +
+                                (screenOnPowerGreen + brightnessBin * screenFullPowerGreen) * (k + 0.5f) / BatteryStats.NUM_RGB_GREEN_BINS +
+                                (screenOnPowerBlue + brightnessBin * screenFullPowerBlue) * (m + 0.5f) / BatteryStats.NUM_RGB_BLUE_BINS;
+                        long brightnessTime = mStats.getScreenBrightnessTime(i, j, k, m, mRawRealtime, mStatsType)
+                                / 1000;
+                        double p = screenBinPower*brightnessTime;
+			            if (DEBUG && p != 0) {
+			                Log.d(TAG, "Screen bin #" + i + "Red bin #" + j + "Green bin #" + k + "Blue bin #" + m + ": time=" + brightnessTime
+			                        + " power=" + makemAh(p / (60 * 60 * 1000)));
+			            }
+			            power += p;
+                    }
+                }
+        	}
         }
         power /= (60*60*1000); // To hours
         if (power != 0) {

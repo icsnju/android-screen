@@ -99,6 +99,12 @@ public class PowerProfile {
      * Power consumption when screen is on, not including the backlight power.
      */
     public static final String POWER_SCREEN_ON = "screen.on";
+    
+    public static final String POWER_SCREEN_ON_RED = "screen.on.red";
+    
+    public static final String POWER_SCREEN_ON_GREEN = "screen.on.green";
+    
+    public static final String POWER_SCREEN_ON_BLUE = "screen.on.blue";
 
     /**
      * Power consumption when cell radio is on but not on a call.
@@ -120,6 +126,12 @@ public class PowerProfile {
      * 50% brightness, then this should be multiplied by 0.5
      */
     public static final String POWER_SCREEN_FULL = "screen.full";
+    
+    public static final String POWER_SCREEN_FULL_RED = "screen.full.red";
+    
+    public static final String POWER_SCREEN_FULL_GREEN = "screen.full.green";
+    
+    public static final String POWER_SCREEN_FULL_BLUE = "screen.full.blue";
 
     /**
      * Power consumed by the audio hardware when playing back audio content. This is in addition

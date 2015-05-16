@@ -255,6 +255,19 @@ public final class BatteryStatsImpl extends BatteryStats {
 
     int mScreenBrightnessBin = -1;
     final StopwatchTimer[] mScreenBrightnessTimer = new StopwatchTimer[NUM_SCREEN_BRIGHTNESS_BINS];
+    
+    final Runnable noteScreenContent = new Runnable() {
+        public void run() {
+            while (true) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                }
+                noteScreenContentLocked();
+            }
+        }
+    };
+    static boolean noteScreenContentThreadStarted = false;
 
     boolean mInteractive;
     StopwatchTimer mInteractiveTimer;
@@ -444,6 +457,12 @@ public final class BatteryStatsImpl extends BatteryStats {
         mCheckinFile = null;
         mHandler = null;
         clearHistoryLocked();
+        
+        if (!noteScreenContentThreadStarted) {
+            new Thread(noteScreenContent).start();
+            noteScreenContentThreadStarted = true;
+            Log.v("lzl", "note screen content thread started in BatteryStatsImpl()");
+        }
     }
 
     public static interface TimeBaseObs {
@@ -3015,6 +3034,7 @@ public final class BatteryStatsImpl extends BatteryStats {
             }
 
             if (state == Display.STATE_ON) {
+            	//Log.v("lzl", "Screen turning on");
                 // Screen turning on.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3040,6 +3060,7 @@ public final class BatteryStatsImpl extends BatteryStats {
                     updateDischargeScreenLevelsLocked(false, true);
                 }
             } else if (oldState == Display.STATE_ON) {
+            	//Log.v("lzl", "Screen turning off or dozing");
                 // Screen turning off or dozing.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3065,8 +3086,13 @@ public final class BatteryStatsImpl extends BatteryStats {
             }
         }
     }
+    
+    public void noteScreenContentLocked() {
+    	Log.v("lzl", "Screen content changed, time: " + System.currentTimeMillis());
+    }
 
     public void noteScreenBrightnessLocked(int brightness) {
+    	//Log.v("lzl", "Screen brightness changed");
         // Bin the brightness.
         int bin = brightness / (256/NUM_SCREEN_BRIGHTNESS_BINS);
         if (bin < 0) bin = 0;
@@ -6376,6 +6402,12 @@ public final class BatteryStatsImpl extends BatteryStats {
         mCurrentBatteryLevel = 0;
         initDischarge();
         clearHistoryLocked();
+        
+        if (!noteScreenContentThreadStarted) {
+            new Thread(noteScreenContent).start();
+            noteScreenContentThreadStarted = true;
+            Log.v("lzl", "note screen content thread started in BatteryStatsImpl(File, Handler)");
+        }
     }
 
     public BatteryStatsImpl(Parcel p) {
@@ -6384,6 +6416,12 @@ public final class BatteryStatsImpl extends BatteryStats {
         mHandler = null;
         clearHistoryLocked();
         readFromParcel(p);
+        
+        if (!noteScreenContentThreadStarted) {
+            new Thread(noteScreenContent).start();
+            noteScreenContentThreadStarted = true;
+            Log.v("lzl", "note screen content thread started in BatteryStatsImpl(Parcel p)");
+        }
     }
 
     public void setCallback(BatteryCallback cb) {

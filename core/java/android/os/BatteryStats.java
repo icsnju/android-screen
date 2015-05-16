@@ -1081,6 +1081,10 @@ public abstract class BatteryStats implements Parcelable {
     };
 
     public static final int NUM_SCREEN_BRIGHTNESS_BINS = 5;
+    public static final int NUM_RGB_RED_BINS = 5;
+    public static final int NUM_RGB_GREEN_BINS = 5;
+    public static final int NUM_RGB_BLUE_BINS = 5;
+    
 
     /**
      * Returns the time in microseconds that the screen has been on with

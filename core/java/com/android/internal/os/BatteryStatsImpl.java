@@ -261,18 +261,32 @@ public final class BatteryStatsImpl extends BatteryStats {
     int mBlueBin = -1;
     final StopwatchTimer[][][][] mScreenBrightnessTimer = new StopwatchTimer[NUM_SCREEN_BRIGHTNESS_BINS][NUM_RGB_RED_BINS][NUM_RGB_GREEN_BINS][NUM_RGB_BLUE_BINS];
     
-    final Runnable noteScreenContent = new Runnable() {
+    /*Runnable noteScreenContent = new Runnable() {
         public void run() {
             while (true) {
                 try {
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
                 }
-                noteScreenContentLocked();
+                noteScreenContent();
             }
         }
-    };
-    static boolean noteScreenContentThreadStarted = false;
+    };*/
+    private class FlagThread extends Thread {
+    	public boolean stopped = false;
+    	
+    	public void run() {
+    		while (!stopped) {
+    			try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                }
+                noteScreenContent();
+    		}
+    	}
+    }
+    FlagThread noteScreenContentThread;
+    static boolean noteScreenContentThreadCreated = false;
 
     boolean mInteractive;
     StopwatchTimer mInteractiveTimer;
@@ -3034,6 +3048,12 @@ public final class BatteryStatsImpl extends BatteryStats {
 
             if (state == Display.STATE_ON) {
             	Log.v("lzl", "Screen turning on");
+            	if (noteScreenContentThread.stopped) {
+            		noteScreenContentThread = new FlagThread();
+            		noteScreenContentThread.start();
+            		Log.v("lzl", "noteScreenContentThread started in noteScreenStateLocked()");
+            	}
+            	
                 // Screen turning on.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3060,6 +3080,11 @@ public final class BatteryStatsImpl extends BatteryStats {
                 }
             } else if (oldState == Display.STATE_ON) {
             	Log.v("lzl", "Screen turning off or dozing");
+            	if (!noteScreenContentThread.stopped) {
+            		noteScreenContentThread.stopped = true;
+            		Log.v("lzl", "noteScreenContentThread stopped in noteScreenStateLocked()");
+            	}
+            	
                 // Screen turning off or dozing.
                 final long elapsedRealtime = SystemClock.elapsedRealtime();
                 final long uptime = SystemClock.uptimeMillis();
@@ -3084,6 +3109,13 @@ public final class BatteryStatsImpl extends BatteryStats {
                 }
             }
         }
+    }
+    
+    Object noteScreenContentLock = new Object();
+    public void noteScreenContent() {
+    	synchronized(noteScreenContentLock) {
+    		noteScreenContentLocked();
+    	}
     }
     
     public void noteScreenContentLocked() {
@@ -6466,10 +6498,12 @@ public final class BatteryStatsImpl extends BatteryStats {
         initDischarge();
         clearHistoryLocked();
         
-        if (!noteScreenContentThreadStarted) {
-        	new Thread(noteScreenContent).start();
-        	noteScreenContentThreadStarted = true;
-        	Log.v("lzl", "note screen content thread started in BatteryStatsImpl(File, Handler)"); //called on reboot
+        if (!noteScreenContentThreadCreated) {
+        	noteScreenContentThread = new FlagThread();
+        	noteScreenContentThreadCreated = true;
+        	
+        	noteScreenContentThread.start();
+        	Log.v("lzl", "noteScreenContentThread started in BatteryStatsImpl(File, Handler)"); //called on reboot
         }
         
     }

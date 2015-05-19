@@ -25,6 +25,8 @@ import android.bluetooth.BluetoothHeadset;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Point;
+import android.hardware.display.DisplayManagerGlobal;
 import android.net.ConnectivityManager;
 import android.net.NetworkStats;
 import android.net.wifi.WifiManager;
@@ -59,6 +61,8 @@ import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.util.TimeUtils;
 import android.view.Display;
+import android.view.Surface;
+import android.view.SurfaceControl;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.net.NetworkStatsFactory;
@@ -3118,11 +3122,46 @@ public final class BatteryStatsImpl extends BatteryStats {
     	}
     }
     
+    private DisplayManagerGlobal displayManagerGlobal;
+	private Display display;
+	private int displayWidth;
+	private int displayHeight;
+	
     public void noteScreenContentLocked() {
     	Log.v("lzl", "Screen content changed, time: " + System.currentTimeMillis());
     	
-    	Bitmap bitmap = null;
-    	if (bitmap == null) return;
+        int screenshotWidth;
+        int screenshotHeight;
+
+        int rotation = display.getRotation();
+        switch (rotation) {
+            case Surface.ROTATION_0: {
+                screenshotWidth = displayWidth;
+                screenshotHeight = displayHeight;
+            } break;
+            case Surface.ROTATION_90: {
+                screenshotWidth = displayHeight;
+                screenshotHeight = displayWidth;
+            } break;
+            case Surface.ROTATION_180: {
+                screenshotWidth = displayWidth;
+                screenshotHeight = displayHeight;
+            } break;
+            case Surface.ROTATION_270: {
+                screenshotWidth = displayHeight;
+                screenshotHeight = displayWidth;
+            } break;
+            default: {
+                throw new IllegalArgumentException("Invalid rotation: "
+                        + rotation);
+            }
+        }
+    	
+    	Bitmap bitmap = SurfaceControl.screenshot(screenshotWidth, screenshotHeight);
+    	if (bitmap == null) {
+    		Log.v("lzl", "null bitmap");
+    		return;
+    	}
     	
     	int width = bitmap.getWidth();
         int height = bitmap.getHeight();
@@ -6497,6 +6536,14 @@ public final class BatteryStatsImpl extends BatteryStats {
         mCurrentBatteryLevel = 0;
         initDischarge();
         clearHistoryLocked();
+        
+        displayManagerGlobal = DisplayManagerGlobal.getInstance();
+        display = displayManagerGlobal.getRealDisplay(Display.DEFAULT_DISPLAY);
+        
+        Point displaySize = new Point();
+        display.getRealSize(displaySize);
+        displayWidth = displaySize.x;
+        displayHeight = displaySize.y;
         
         if (!noteScreenContentThreadCreated) {
         	noteScreenContentThread = new FlagThread();

@@ -72,6 +72,22 @@ class DisplayAdjustmentUtils {
 
         return false;
     }
+    
+    private static class AdjustmentThread extends Thread {
+    	public boolean stopped = false;
+    	
+    	public void run() {
+    		while (!stopped) {
+//    			try {
+//    				Thread.sleep(1000);
+//    			} catch (InterruptedException e) {
+//    				
+//    			}
+    		}
+    	}
+    }
+    
+    private static AdjustmentThread mAdjustmentThread = null;
 
     /**
      * Applies the specified user's display color adjustments.
@@ -83,6 +99,12 @@ class DisplayAdjustmentUtils {
         if (Settings.Secure.getIntForUser(cr,
                 Settings.Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED, 0, userId) != 0) {
             colorMatrix = multiply(colorMatrix, INVERSION_MATRIX_VALUE_ONLY);
+            
+            mAdjustmentThread = new AdjustmentThread();
+            mAdjustmentThread.start();
+        } else {
+        	if (mAdjustmentThread != null)
+        		mAdjustmentThread.stopped = true;
         }
 
         if (Settings.Secure.getIntForUser(cr,

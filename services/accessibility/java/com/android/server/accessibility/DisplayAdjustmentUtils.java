@@ -24,8 +24,14 @@ import android.os.Parcel;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.util.Slog;
+import android.view.Display;
+import android.view.SurfaceControl;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
+
+import android.graphics.Bitmap;
 
 /**
  * Utility methods for performing accessibility display adjustments.
@@ -73,16 +79,32 @@ class DisplayAdjustmentUtils {
         return false;
     }
     
+    private static  WindowManager mWindowManager = null;
+    
     private static class AdjustmentThread extends Thread {
     	public boolean stopped = false;
     	
     	public void run() {
     		while (!stopped) {
-//    			try {
-//    				Thread.sleep(1000);
-//    			} catch (InterruptedException e) {
-//    				
-//    			}
+    			try {
+    				Thread.sleep(1000);
+    				
+    				Display mDisplay = mWindowManager.getDefaultDisplay();
+    				DisplayMetrics mDisplayMetrics = new DisplayMetrics();
+    				mDisplay.getRealMetrics(mDisplayMetrics);
+    				
+    				float[] dims = {mDisplayMetrics.widthPixels, mDisplayMetrics.heightPixels};
+
+    		        // Take the screenshot
+    		        Bitmap mScreenBitmap = SurfaceControl.screenshot((int) dims[0], (int) dims[1]);
+    		        
+    		        if (mScreenBitmap != null) {
+    		        	
+    		        }
+    				
+    			} catch (InterruptedException e) {
+    				
+    			}
     		}
     	}
     }
@@ -95,7 +117,11 @@ class DisplayAdjustmentUtils {
     public static void applyAdjustments(Context context, int userId) {
         final ContentResolver cr = context.getContentResolver();
         float[] colorMatrix = null;
-
+        
+        if (mWindowManager == null) {
+        	mWindowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        }
+       
         if (Settings.Secure.getIntForUser(cr,
                 Settings.Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED, 0, userId) != 0) {
             colorMatrix = multiply(colorMatrix, INVERSION_MATRIX_VALUE_ONLY);

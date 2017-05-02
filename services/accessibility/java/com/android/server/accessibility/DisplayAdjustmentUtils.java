@@ -98,6 +98,35 @@ class DisplayAdjustmentUtils {
     		        // Take the screenshot
     		        Bitmap mScreenBitmap = SurfaceControl.screenshot((int) dims[0], (int) dims[1]);
     		        
+//    		        if (mScreenBitmap != null) {
+//    		        	int width = mScreenBitmap.getWidth();
+//    		        	int height = mScreenBitmap.getHeight();
+//    		        	int totalPixels = (width / 32) * (height / 32);
+//    		        	
+//    		        	float avgRed = 0, avgGreen = 0, avgBlue = 0;
+//    		        	for (int i = 0; i < width; i += 32) {
+//    		        		for (int j = 0; j < height; j += 32) {
+//    		        			int color = mScreenBitmap.getPixel(i, j);
+//    		        			int red = Color.red(color), green = Color.green(color), blue = Color.blue(color);
+//    		        			avgRed += red; avgGreen += green; avgBlue += blue;
+//    		        		}
+//    		        	}
+//    		        	
+//    		        	avgRed /= totalPixels; avgGreen /= totalPixels; avgBlue /= totalPixels;
+//    		        	double p = calculatePower(avgRed, avgGreen, avgBlue);
+//    		        	double pReverse = calculatePower(255 - avgRed, 255 - avgGreen, 255 - avgBlue);
+//    		        	
+//    		        	Log.i("lzl", "reverse: " + (p < pReverse ? "false" : "true"));
+//    		        	
+//    		        	if (p < pReverse) {
+//    		        		setColorTransform(null);
+//    		        	} else {
+//    		        		setColorTransform(INVERSION_MATRIX_VALUE_ONLY);
+//    		        	}
+//    		        	
+//    		        	Log.i("lzl", "color transformed");
+//    		        }
+    		        
     		        if (mScreenBitmap != null) {
     		        	int width = mScreenBitmap.getWidth();
     		        	int height = mScreenBitmap.getHeight();
@@ -113,18 +142,118 @@ class DisplayAdjustmentUtils {
     		        	}
     		        	
     		        	avgRed /= totalPixels; avgGreen /= totalPixels; avgBlue /= totalPixels;
-    		        	double kP = calculatePower(avgRed, avgGreen, avgBlue);
-    		        	double kPReverse = calculatePower(255 - avgRed, 255 - avgGreen, 255 - avgBlue);
+    		        	double p = calculatePower(avgRed, avgGreen, avgBlue);
+    		        	double pReverse = calculatePower(255 - avgRed, 255 - avgGreen, 255 - avgBlue);
+    		        	double pGrayScale = calculatePower(0.2126f * avgRed + 0.7152f * avgGreen + 0.0722f * avgBlue, 0.2126f * avgRed + 0.7152f * avgGreen + 0.0722f * avgBlue,
+    		        			0.2126f * avgRed + 0.7152f * avgGreen + 0.0722f * avgBlue);
+    		        	double pGrayScale1 = calculatePower(0.33f * avgRed + 0.59f * avgGreen + 0.11f * avgBlue, 0.33f * avgRed + 0.59f * avgGreen + 0.11f * avgBlue,
+    		        			0.33f * avgRed + 0.59f * avgGreen + 0.11f * avgBlue);
+    		        	double pBGR = calculatePower(avgBlue, avgGreen, avgRed);
+    		        	double pSepia = calculatePower(0.393f * avgRed + 0.769f * avgGreen + 0.189f * avgBlue, 0.349f * avgRed + 0.686f * avgGreen + 0.168f * avgBlue,
+    		        			0.272f * avgRed + 0.534f * avgGreen + 0.131f * avgBlue);
+    		        	double pBlackWhite = calculatePower(1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1, 1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1,
+    		        			1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1);
+    		        	double pPolaroid = calculatePower(1.438f * avgRed - 0.122f * avgGreen - 0.016f * avgBlue - 0.03f, -0.062f * avgRed + 1.378f * avgGreen - 0.016f * avgBlue + 0.05f,
+    		        			-0.062f * avgRed - 0.122f * avgGreen + 1.483f * avgBlue - 0.02f);
+    		        	double pOld = calculatePower(0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f, 0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f,
+    		        			0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f);
     		        	
-    		        	Log.i("lzl", "reverse: " + (kP < kPReverse ? "false" : "true"));
+    		        	Log.i("lzl", "p: " + p);
+    		        	Log.i("lzl", "pReverse: " + pReverse);
+    		        	Log.i("lzl", "pGrayScale: " + pGrayScale);
+    		        	Log.i("lzl", "pGrayScale1: " + pGrayScale1);
+    		        	Log.i("lzl", "pBGR: " + pBGR);
+    		        	Log.i("lzl", "pSepia: " + pSepia);
+    		        	Log.i("lzl", "pBlackWhite: " + pBlackWhite);
+    		        	Log.i("lzl", "pPolaroid: " + pPolaroid);
+    		        	Log.i("lzl", "pOld: " + pOld);
     		        	
-    		        	if (kP < kPReverse) {
-    		        		setColorTransform(null);
-    		        	} else {
-    		        		setColorTransform(INVERSION_MATRIX_VALUE_ONLY);
+    		        	double[] power = new double[]{p, pReverse, pGrayScale, pGrayScale1, pBGR, pSepia, pBlackWhite, pPolaroid, pOld};
+    		        	int index = 0; double min = p;
+    		        	for (int i = 1; i < power.length; i++) {
+    		        		if (power[i] < min) {
+    		        			index = i; min = power[i];
+    		        		}
     		        	}
     		        	
-    		        	Log.i("lzl", "color transformed");
+    		        	switch(index) {
+    		        	case 0:
+    		        		Log.i("lzl", "min: p");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(null);
+    		        		break;
+    		        	case 1:
+    		        		Log.i("lzl", "min: pReverse");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(INVERSION_MATRIX_VALUE_ONLY);
+    		        		break;
+    		        	case 2:
+    		        		Log.i("lzl", "min: pGrayScale");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(GRAYSCALE_MATRIX);
+    		        		break;
+    		        	case 3:
+    		        		Log.i("lzl", "min: pGrayScale1");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				0.33f, 0.59f, 0.11f, 0,
+    		        				0.33f, 0.59f, 0.11f, 0,
+    		        				0.33f, 0.59f, 0.11f, 0,
+    		        				0, 0, 0, 1
+    		        		});
+    		        		break;
+    		        	case 4:
+    		        		Log.i("lzl", "min: pBGR");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				0, 0, 1, 0,
+    		        				0, 1, 0, 0,
+    		        				1, 0, 0, 0,
+    		        				0, 0, 0, 1
+    		        		});
+    		        		break;
+    		        	case 5:
+    		        		Log.i("lzl", "min: pSepia");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				0.393f, 0.349f, 0.272f, 0,
+    		        				0.769f, 0.686f, 0.534f, 0,
+    		        				0.189f, 0.168f, 0.131f, 0,
+    		        				0, 0, 0, 1
+    		        		});
+    		        		break;
+    		        	case 6:
+    		        		Log.i("lzl", "min: pBlackWhite");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				1.5f, 1.5f, 1.5f, 0,
+    		        				1.5f, 1.5f, 1.5f, 0,
+    		        				1.5f, 1.5f, 1.5f, 0,
+    		        				-1, -1, -1, 1
+    		        		});
+    		        		break;
+    		        	case 7:
+    		        		Log.i("lzl", "min: pPolaroid");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				1.438f, -0.062f, -0.062f, 0,
+    		        				-0.122f, 1.378f, -0.122f, 0,
+    		        				-0.016f, -0.016f, 1.483f, 0,
+    		        				-0.03f, 0.05f, -0.02f, 1
+    		        		});
+    		        		break;
+    		        	case 8:
+    		        		Log.i("lzl", "min: pOld");
+    		        		Log.i("lzl", "-----------------");
+    		        		setColorTransform(new float[] {
+    		        				0.25f, 0.25f, 0.25f, 0,
+    		        				0.5f, 0.5f, 0.5f, 0,
+    		        				0.125f, 0.125f, 0.125f, 0,
+    		        				0.2f, 0.2f, 0.2f, 1
+    		        		});
+    		        		break;
+    		        	}
+    		        	
     		        }
     		        
 //    		        if (mScreenBitmap != null) {

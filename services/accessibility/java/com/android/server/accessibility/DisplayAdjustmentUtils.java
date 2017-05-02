@@ -25,6 +25,7 @@ import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.Slog;
 import android.view.Display;
 import android.view.SurfaceControl;
@@ -32,6 +33,7 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 
 import android.graphics.Bitmap;
+import android.graphics.Color;
 
 /**
  * Utility methods for performing accessibility display adjustments.
@@ -48,12 +50,12 @@ class DisplayAdjustmentUtils {
     };
 
     /** Matrix and offset used for value-only display inversion. */
-    private static final float[] INVERSION_MATRIX_VALUE_ONLY = new float[] {
-           0, -.5f, -.5f, 0,
-        -.5f,    0, -.5f, 0,
-        -.5f, -.5f,    0, 0,
-           1,    1,    1, 1
-    };
+//    private static final float[] INVERSION_MATRIX_VALUE_ONLY = new float[] {
+//           -1, 0, 0, 0,
+//            0, -1, 0, 0,
+//            0, 0, -1, 0,
+//            1, 1, 1, 1
+//    };
 
     /** Default inversion mode for display color correction. */
     private static final int DEFAULT_DISPLAY_DALTONIZER =
@@ -87,8 +89,6 @@ class DisplayAdjustmentUtils {
     	public void run() {
     		while (!stopped) {
     			try {
-    				Thread.sleep(1000);
-    				
     				Display mDisplay = mWindowManager.getDefaultDisplay();
     				DisplayMetrics mDisplayMetrics = new DisplayMetrics();
     				mDisplay.getRealMetrics(mDisplayMetrics);
@@ -99,14 +99,103 @@ class DisplayAdjustmentUtils {
     		        Bitmap mScreenBitmap = SurfaceControl.screenshot((int) dims[0], (int) dims[1]);
     		        
     		        if (mScreenBitmap != null) {
+    		        	int width = mScreenBitmap.getWidth();
+    		        	int height = mScreenBitmap.getHeight();
+    		        	int totalPixels = (width / 32) * (height / 32);
     		        	
+    		        	int[][] redValues = new int[width][height];
+    		        	int[][] greenValues = new int[width][height];
+    		        	int[][] blueValues = new int[width][height];
+    		        	
+    		        	for (int i = 0; i < width; i += 32) {
+    		        		for (int j = 0; j < height; j += 32) {
+    		        			int color = mScreenBitmap.getPixel(i, j);
+    		        			redValues[i][j] = Color.red(color);
+    		        			greenValues[i][j] = Color.green(color);
+    		        			blueValues[i][j] = Color.blue(color);
+    		        		}
+    		        	}
+    		        	
+    		        	Log.i("lzl", "color values stored");
+    		        	
+    		        	float offset = 0;
+    		        	boolean reverse = false;
+    		        	double minP = Double.MAX_VALUE;
+    		        	for (int k = 0; k <= 255; k += 8) {
+    		        		float avgRed = 0, avgGreen = 0, avgBlue = 0;
+    		        		for (int i = 0; i < width; i += 32) {
+    		        			for (int j = 0; j < height; j += 32) {
+    		        				int red = redValues[i][j] + k, green = greenValues[i][j] + k, blue = blueValues[i][j] + k;
+    		        				red = red < 256 ? red : red - 256;
+    		        				green = green < 256 ? green : green - 256;
+    		        				blue = blue < 256 ? blue : blue - 256;
+    		        				avgRed += red; avgGreen += green; avgBlue += blue;
+    		        			}
+    		        		}
+    		        		avgRed /= totalPixels; avgGreen /= totalPixels; avgBlue /= totalPixels;
+    		        		double kP = calculatePower(avgRed, avgGreen, avgBlue);
+    		        		if (kP < minP) {
+    		        			minP = kP;
+    		        			offset = (float) k;
+    		        			reverse = false;
+    		        		}
+    		        		double kPReverse = calculatePower(255 - avgRed, 255 - avgGreen, 255 - avgBlue);
+    		        		if (kPReverse < minP) {
+    		        			minP = kPReverse;
+    		        			offset = (float) k;
+    		        			reverse = true;
+    		        		}
+    		        	}
+    		        	
+    		        	Log.i("lzl", "color transform matrix calculated");
+    		        	
+    		        	offset /= 255;
+    		        	
+    		        	Log.i("lzl", "offset: " + offset);
+    		        	Log.i("lzl", "reverse: " + (reverse ? "true" : "false"));
+    		        	
+    		        	if (!reverse) {
+    		        		float[] matrix = new float[] {
+    	    		        		1, 0, 0, 0,
+    	    		        		0, 1, 0, 0,
+    	    		        		0, 0, 1, 0,
+    	    		        		offset, offset, offset, 1
+    	    		        	};
+    		        		setColorTransform(matrix);
+    		        	} else {
+    		        		float[] matrix = new float[] {
+    	    		        		-1, 0, 0, 0,
+    	    		        		0, -1, 0, 0,
+    	    		        		0, 0, -1, 0,
+    	    		        		1-offset, 1-offset, 1-offset, 1
+    	    		        	};
+    		        		setColorTransform(matrix);
+    		        	}
+    		        	
+    		        	Log.i("lzl", "color transformed");
     		        }
     				
+    		        Thread.sleep(10000);
+    		        
     			} catch (InterruptedException e) {
     				
     			}
     		}
     	}
+    }
+    
+    private static double screen_full_black = 86;
+    private static double screen_full_red = 116;
+    private static double screen_full_green = 203;
+    private static double screen_full_blue = 187;
+    
+    private static double calculatePower(float avgRed, float avgGreen, float avgBlue) {
+    	double avgRedL = avgRed / 255, avgGreenL = avgGreen / 255, avgBlueL = avgBlue / 255;
+    	avgRedL = avgRedL <= 0.04045 ? avgRedL / 12.92 : Math.pow((avgRedL + 0.055) / 1.055, 2.4);
+    	avgGreenL = avgGreenL <= 0.04045 ? avgGreenL / 12.92 : Math.pow((avgGreenL + 0.055) / 1.055, 2.4);
+    	avgBlueL = avgBlueL <= 0.04045 ? avgBlueL / 12.92 : Math.pow((avgBlueL + 0.055) / 1.055, 2.4);
+    	
+    	return screen_full_black + avgRedL * screen_full_red + avgGreenL * screen_full_green + avgBlueL * screen_full_blue;
     }
     
     private static AdjustmentThread mAdjustmentThread = null;
@@ -124,7 +213,7 @@ class DisplayAdjustmentUtils {
        
         if (Settings.Secure.getIntForUser(cr,
                 Settings.Secure.ACCESSIBILITY_DISPLAY_INVERSION_ENABLED, 0, userId) != 0) {
-            colorMatrix = multiply(colorMatrix, INVERSION_MATRIX_VALUE_ONLY);
+//            colorMatrix = multiply(colorMatrix, INVERSION_MATRIX_VALUE_ONLY);
             
             mAdjustmentThread = new AdjustmentThread();
             mAdjustmentThread.start();

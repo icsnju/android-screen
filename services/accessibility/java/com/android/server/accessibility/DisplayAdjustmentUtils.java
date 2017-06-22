@@ -151,12 +151,12 @@ class DisplayAdjustmentUtils {
     		        	double pBGR = calculatePower(avgBlue, avgGreen, avgRed);
     		        	double pSepia = calculatePower(0.393f * avgRed + 0.769f * avgGreen + 0.189f * avgBlue, 0.349f * avgRed + 0.686f * avgGreen + 0.168f * avgBlue,
     		        			0.272f * avgRed + 0.534f * avgGreen + 0.131f * avgBlue);
-    		        	double pBlackWhite = calculatePower(1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1, 1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1,
-    		        			1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 1);
-    		        	double pPolaroid = calculatePower(1.438f * avgRed - 0.122f * avgGreen - 0.016f * avgBlue - 0.03f, -0.062f * avgRed + 1.378f * avgGreen - 0.016f * avgBlue + 0.05f,
-    		        			-0.062f * avgRed - 0.122f * avgGreen + 1.483f * avgBlue - 0.02f);
-    		        	double pOld = calculatePower(0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f, 0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f,
-    		        			0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f);
+    		        	double pBlackWhite = calculatePower(1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 255, 1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 255,
+    		        			1.5f * avgRed + 1.5f * avgGreen + 1.5f * avgBlue - 255);
+    		        	double pPolaroid = calculatePower(1.438f * avgRed - 0.122f * avgGreen - 0.016f * avgBlue - 0.03f * 255, -0.062f * avgRed + 1.378f * avgGreen - 0.016f * avgBlue + 0.05f * 255,
+    		        			-0.062f * avgRed - 0.122f * avgGreen + 1.483f * avgBlue - 0.02f * 255);
+    		        	double pOld = calculatePower(0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f * 255, 0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f * 255,
+    		        			0.25f * avgRed + 0.5f * avgGreen + 0.125f * avgBlue + 0.2f * 255);
     		        	
     		        	Log.i("lzl", "p: " + p);
     		        	Log.i("lzl", "pReverse: " + pReverse);
